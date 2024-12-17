@@ -3,16 +3,17 @@ import os
 import subprocess
 import sys
 from lexer import *
-from parser import *
+from code_emission import *
 
 def LexicalAnalysis(preprocessed_file) :
-    print("Lexical analysis is processing..")
+    print("\nLexical analysis is processing..\n")
     with open(preprocessed_file , "r") as file:
         source_code = file.read()
-
     lexer = LEXER(source_code)
     try:
         tokens = lexer.tokenize()
+        for token in tokens :
+            print(token)
         return tokens
     except SyntaxError as e:
         print(f"Lexer error: {e}")
@@ -20,9 +21,24 @@ def LexicalAnalysis(preprocessed_file) :
         os.remove(preprocessed_file)
 
 def Parsing(tokens) :
-    print("Running lexer and parser...")
+    print("\nParsing is processing...\n")
     parser = Parser(tokens)
-    parser.debugAST(parser.parseProg())
+    root = parser.parseProgNode()
+    parser.print_AST(root)
+    return root
+
+def Assembling(root) :
+    print("\nAssembling the code is processing...\n")
+    assembler = AssemblyGenerator(root)
+    assembly_root = assembler.generate()
+    assembler.print_AAST(assembly_root)
+    return assembly_root
+
+def CodeGenerating(assembly_root):
+    print("\nRunning full compilation up to code generation...\n")
+    with open("out.s", "w") as asm_file:
+        generator = CodeEmitter(asm_file)
+        generator.emit_assembly(assembly_root)
 
 def main():
     #Set up command-line argument parsing
@@ -39,7 +55,7 @@ def main():
     preprocessed_file = source_file.replace(".c" , ".i")
     try:
         subprocess.run(["gcc" , "-E" , "-P"  , source_file , "-o" , preprocessed_file])
-        print(f"Preprocessed {source_file} to {preprocessed_file}")
+        #print(f"Preprocessed {source_file} to {preprocessed_file}")
     except subprocess.CalledProcessError:
         print("Error during preprocessing")
         sys.exit(1)
@@ -56,8 +72,10 @@ def main():
         Parsing(LexicalAnalysis(preprocessed_file))
         sys.exit(0)
 
-
-
+    # Handle --codgen flag : run the excutable code
+    if args.codegen:
+        CodeGenerating(Assembling(Parsing(LexicalAnalysis(preprocessed_file))))
+        sys.exit(0)
 
     #Step 2 : Compiled preprocessed file to assembly
     assembly_file = source_file.replace(".c" , ".s")
@@ -81,13 +99,7 @@ def main():
     finally:
         os.remove(assembly_file)
 
-    # Handle --codegen flag: Run lexer, parser, and code generation, but stop before code emission
-    if args.codegen:
-        print("Running full compilation up to code generation...")
-        # Placeholder for code generation logic
-        # You should implement your lexer, parser, and code generation here
-        os.remove(assembly_file)
-        sys.exit(0)
+
 
 if __name__ == "__main__":
     main()
